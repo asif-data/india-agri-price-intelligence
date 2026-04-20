@@ -1,4 +1,4 @@
-India Agricultural Price Intelligence System
+# India Agricultural Price Intelligence System
 
 ## Mission
 Quantify spatial price inefficiency in Indian agricultural commodity 
