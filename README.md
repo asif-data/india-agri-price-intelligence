@@ -1,44 +1,106 @@
-# India Agricultural Price Intelligence System
+# Tomato Price Arbitrage — AgMarkNet India
 
-## Mission
-Quantify spatial price inefficiency in Indian agricultural commodity 
-markets to identify arbitrage opportunities for small entrepreneurs 
-operating within a 2-day transport window constraint.
+A SQL-based analytical model to identify profitable inter-mandi tomato trade routes for a small entrepreneur operating a single 3MT truck across 11 Indian states.
+
+---
+
+## The Problem
+
+Price crashes at farm gates and price spikes in urban markets often happen simultaneously. The information to bridge that gap exists — it's published daily by the Government of India on AgMarkNet. This project operationalises that data into actionable route recommendations.
+
+---
+
+## Dashboard
+
+![Power BI Dashboard](docs/power_bi_dashboard.png)
+
+**318 viable mandi pairs | Avg. profit per trip: ₹12,360 | Avg. trading window: 3.99 months**
+
+---
 
 ## Dataset
-This analysis is based on modal prices for tomato across Uttar Pradesh 
-mandis for the intended date range 01-01-2025 to 31-12-2025. Data is 
-sourced from the Agriculture Marketing Information System portal 
-(agmarknet.gov.in), published by the Directorate of Marketing and 
-Inspection, Department of Agriculture and Farmers Welfare, 
-Government of India.
 
-## Analytical Questions
-1. Which mandi pairs show a statistically persistent price difference 
-   greater than estimated transport cost for the same commodity, 
-   variety, and grade on a 2-day lag basis?
-2. Which commodity-mandi combinations have sufficient arrival volume 
-   to be operationally viable — filtering out thin markets where 
-   price signals are unreliable?
-3. Which mandi pairs show this price gap consistently across at least 
-   3 months, indicating structural inefficiency rather than seasonal 
-   noise?
-4. Does price inefficiency follow seasonal patterns — and if so, 
-   when is the optimal procurement window for each commodity?
+- **Source:** Agriculture Marketing Information System — [agmarknet.gov.in](https://agmarknet.gov.in), published by the Directorate of Marketing and Inspection, Department of Agriculture and Farmers Welfare, Government of India
+- **Commodity:** Tomato
+- **Period:** November 2025 – April 2026
+- **States covered:** Andhra Pradesh, Gujarat, Haryana, Karnataka, Madhya Pradesh, Maharashtra, NCT of Delhi, Punjab, Rajasthan, Uttar Pradesh, Telangana
+- **Raw records:** 39,074 rows (post-cleaning)
 
-## Constraints
-- Missing reporting dates for many mandis
-- Within-state analysis only — interstate price dynamics excluded
-- Variety and grade inconsistency across mandis requiring 
-  standardization before direct comparison
-- Low arrival volume mandis produce noisy price signals — 
-  thin markets will be filtered
-- Transport cost data unavailable — will be estimated using mandi 
-  distance, 1-ton vehicle fuel consumption, labor for 2, and 
-  packaging as explicit documented assumptions
+---
 
-## End Deliverable
-A ranked list of mandi pairs by average 2-day price differential, 
-filtered for volume viability and 3-month consistency, used by a 
-small entrepreneur before a seasonal procurement cycle to validate 
-whether an arbitrage route covers overhead and logistics costs.
+## Methodology
+
+The pipeline runs across three SQL layers:
+
+### Layer 1 — Staging (`price_analysis_staging`)
+Cleans and standardises raw AgMarkNet data:
+- **Grade standardisation:** Reclassified into three analytical categories — `FAQ` (GoI standard), `Local` (high volume, consistent behaviour), `Other` (Grade A, B, Non-FAQ, Medium). Grade `NA` excluded — under 1% of total volume, prices reflect individual trader behaviour rather than market consensus.
+- **Type conversions:** Modal price and arrival quantity converted from comma-formatted TEXT to NUMERIC; arrival date reformatted from DD-MM-YYYY to YYYY-MM-DD.
+- **Exclusions:** NULL arrival dates and Grade NA rows.
+
+### Layer 2 — Arbitrage Identification (`tomato_price_arbitrage`)
+Cross-joins source and destination mandis to identify directional price gaps:
+- Source mandi price on date X vs destination mandi on date X+N (1–7 day window)
+- Same-grade matching only (FAQ vs FAQ, Local vs Local, Other vs Other)
+- Filters applied: minimum 6 tonne arrival quantity; minimum ₹100/quintal price gap; same-mandi exclusion via composite key (state-district-market)
+- Output: 1,685,459 mandi pair comparisons across 37,062 distinct pairs
+
+### Layer 3 — Logistics & Viability (`logistics_calculation`, `viable_tomato_arbitrage`)
+Estimates one-way transport cost and net profit per trip:
+
+**Vehicle assumptions:**
+| Parameter | Value |
+|---|---|
+| Truck capacity | 3 MT (30 quintals) |
+| Fuel efficiency | 4 km/litre |
+| Fuel price | ₹92/litre |
+| Spoilage (plastic crates) | 5% (conservative) |
+
+**Fixed costs per trip:**
+| Item | Cost |
+|---|---|
+| Loading & unloading | ₹1,600 (₹800 per mandi) |
+| Crate rental (120 crates) | ₹600 |
+| Weighing charges | ₹600 (₹300 per mandi) |
+| Driver food allowance | ₹200 |
+
+**Variable costs per km:**
+| Item | Cost |
+|---|---|
+| Toll charges | ₹5/km |
+| Maintenance | ₹3/km |
+| Driver & assistant | ₹1/km |
+
+**Distance logic:** Where Gemini returned conflicting distance values, the maximum was used — accounting for local/non-highway routes as the conservative (higher cost) case.
+
+**Exclusion:** Mandi commission (2% of sale value) was excluded as destination arrival prices are unavailable in the dataset.
+
+---
+
+## Key Finding
+
+7 of the top 12 most profitable source mandis are **Barad APMC, Shivpuri, Madhya Pradesh** — a result the model surfaced without being directed to look for it. Shivpuri is India's #1 tomato-producing district, Government-designated under the One District One Product (ODOP) scheme. Top routes flow northward into Haryana's urban consumption centres, with additional routes to Rajasthan, Gujarat, and Punjab.
+
+---
+
+## Limitations
+
+- Transport cost assumptions are standardised, not real-time
+- Mandi commission excluded from profit calculation
+- This is a directional model — actual profit depends on execution, negotiation, and ground conditions
+- Distance data sourced via Gemini; max value used where conflicts arose
+
+---
+
+## Tools
+
+- **SQL** — Data cleaning, transformation, arbitrage modelling
+- **Power BI** — Interactive dashboard with filters by profit threshold, grade, and state
+
+---
+
+## Author
+
+Open to opportunities in data analysis, agritech, and supply chain analytics.
+---
+[LinkedIn](https://www.linkedin.com/in/asif-khan-data/)
